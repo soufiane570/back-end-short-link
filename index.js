@@ -7,11 +7,15 @@ const Clipboard = require('./models/Clipboard');
 const { Op } = require('sequelize');
 const cors = require('cors'); // Import the cors package
 const app = express();
-app.use(cors({
-    origin: 'https://front-shor-link.vercel.app', // Allow requests from this origin
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type'],
-  }));
+
+// Configurer CORS
+const corsOptions = {
+  origin: 'https://front-shor-link.vercel.app', // Remplacez par l'URL de votre front-end
+  methods: ['GET', 'POST', 'PUT', 'DELETE'], // Méthodes HTTP autorisées
+  allowedHeaders: ['Content-Type', 'Authorization'] // En-têtes autorisés
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
