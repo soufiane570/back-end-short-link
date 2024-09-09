@@ -2,7 +2,8 @@
 const express = require('express');
 const sequelize = require('./db');
 const Url = require('./models/Url');
-const LinksList = require('./models/ListsLinks');
+const Links = require('./models/Links')
+const ListsLinks = require('./models/ListsLinks');
 const Clipboard = require('./models/Clipboard');
 const { Op } = require('sequelize');
 const cors = require('cors'); // Import the cors package
@@ -45,7 +46,23 @@ async function getUniqueShortUrl() {
 
     return shortUrl;
 }
+// Check if short URL already exists and generate a unique one
+async function getUniqueShortLinks() {
+    let shortUrl = generateShortUrl();
+    let exists = true;
 
+    while (exists) {
+        exists = await Links.findOne({ where: { short_link: shortUrl } });
+
+        if (exists) {
+            shortUrl = generateShortUrl(); // If exists, generate a new one
+        } else {
+            exists = false; // Unique short URL found
+        }
+    }
+
+    return shortUrl;
+}
 // Validate the original URL format using regex
 function validateUrl(url) {
     const urlPattern = /^(https?:\/\/)?([a-zA-Z0-9\-_]+\.)+[a-zA-Z]{2,6}(\/.*)*\/?$/;
@@ -126,36 +143,66 @@ app.get('/:short_url', async (req, res) => {
 
 // 3. Link List
 app.post('/linklist', async (req, res) => {
-    const { links } = req.body;
+    const { urls, customShortLink } = req.body;
+
+    if (urls.length > 50) {
+        return res.status(400).json({ message: 'Cannot exceed 50 URLs.' });
+    }
 
     try {
-        const list_short_url = await getUniqueShortUrl();
-        const linksList = await LinksList.create({ links, list_short_url });
-        res.json({ list_short_url: linksList.list_short_url });
+        // Generate or use custom short link
+        let shortLink = customShortLink || await getUniqueShortLinks();
+
+        // Check if custom short link is already in use
+        if (customShortLink) {
+            const existingLink = await Links.findOne({ where: { short_link: customShortLink } });
+            if (existingLink) {
+                return res.status(400).json({ message: 'Custom short link already in use.' });
+            }
+        }
+
+        // Create entry in the Links table
+        const linkEntry = await Links.create({ short_link: shortLink });
+
+        // Save URLs and titles in ListsLinks table
+        for (let item of urls) {
+            await ListsLinks.create({
+                title: item.title,
+                description: item.description || '',
+                url: item.url,
+                id_links: linkEntry.id
+            });
+        }
+
+        res.json({ shortLink });
     } catch (error) {
-        res.status(400).json({ error: error.message });
+        res.status(500).json({ message: 'Server error', error });
     }
 });
 
 
 
 // 4. Get Link List
-app.get('/linklist/:list_short_url', async (req, res) => {
-    const { list_short_url } = req.params;
-    const list = await LinksList.findOne({ where: { list_short_url } });
+app.get('/linklist/:shortLink', async (req, res) => {
+    const { shortLink } = req.params;
 
-    if (!list) {
-        return res.status(404).send('List not found');
+    try {
+        const link = await Links.findOne({ 
+            where: { short_link: shortLink }, 
+            include: [ListsLinks] // Use the correct model name
+        });
+
+        if (!link) {
+            return res.status(404).json({ message: 'Short link not found' });
+        }
+
+        res.json({ urls: link.ListsLinks });
+    } catch (error) {
+        console.error('Error fetching short link:', error); // Log the actual error
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
-
-    const links = list.links.split('\n').map(link => {
-        const [url, title] = link.split(' ');
-        return { url, title };
-    });
-
-    res.json(links);
 });
-
+ 
 // 5. Online Clipboard
 app.post('/clipboard', async (req, res) => {
     const { clipboard_text } = req.body;
