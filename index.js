@@ -187,12 +187,12 @@ app.post('/linklist', async (req, res) => {
 
 
 // 4. Get Link List
-app.get('/linklist/:shortLink', async (req, res) => {
-    const { shortLink } = req.params;
+app.get('/linklist/:short_link', async (req, res) => {
+    const { short_link } = req.params;
 
     try {
         const link = await Links.findOne({ 
-            where: { short_link: shortLink }, 
+            where: { short_link: short_link }, 
             include: [ListsLinks] // Use the correct model name
         });
 
