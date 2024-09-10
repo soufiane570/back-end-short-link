@@ -132,17 +132,21 @@ app.post('/shorten', async (req, res) => {
 // 2. Redirect to original URL
 app.get('/:short_url', async (req, res) => {
     const { short_url } = req.params;
-    const url = await Url.findOne({ where: { [Op.or]: [{ short_url }, { custom_url: short_url }] } });
+    try {
+        const url = await Url.findOne({ where: { [Op.or]: [{ short_url }, { custom_url: short_url }] } });
 
-    if (!url) {
-        return res.status(404).send('URL not found');
+        if (!url) {
+            return res.status(404).send('URL not found');
+        }
+
+        if (url.expiration_date && new Date(url.expiration_date) < new Date()) {
+            return res.status(410).send('URL expired');
+        }
+
+        res.json({ original_url: url.original_url });
+    } catch (error) {
+        res.status(500).send('Server error');
     }
-
-    if (url.expiration_date && new Date(url.expiration_date) < new Date()) {
-        return res.status(410).send('URL expired');
-    }
-
-    res.redirect(url.original_url);
 });
 
 // 3. Link List
